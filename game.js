@@ -1026,7 +1026,7 @@ function useSpecial(attacker, target) {
 
   updateHud();
 }
-
+    
 function specialPowerPunch(attacker, target) {
   addEffect("impact", centerX(attacker) + attacker.facing * 54 - 36, getEntityTop(attacker) + 56);
   shakeArena();
@@ -1044,40 +1044,44 @@ function specialSpeedBoost(attacker, type) {
 
 function specialFireBreath(attacker, target) {
   flashArena("fire");
-  addDirectionalEffect("cone fire", attacker, 200, 80);
+  addDirectionalEffect("cone fire", attacker, 230, 96);
 
-  if (isFacingTarget(attacker, target) && distanceBetween(attacker, target) < 210) {
-    applyDamage(target, getScaledDamage(attacker, target, 14), attacker.facing * 10);
+  if (isFacingTarget(attacker, target) && distanceBetween(attacker, target) < 238) {
+    applyDamage(target, getScaledDamage(attacker, target, 15), attacker.facing * 14);
 
     const now = performance.now();
-    target.burnUntil = now + 4200;
-    target.nextBurnAt = now + 550;
+    target.burnUntil = now + 4800;
+    target.nextBurnAt = now + 450;
 
     addEffect("impact", centerX(target) - 36, getEntityTop(target) + 55);
   }
 }
 
 function specialEyeLasers(attacker, target) {
-  const distance = Math.min(520, Math.max(220, Math.abs(centerX(target) - centerX(attacker)) + 50));
-  addDirectionalEffect("beam", attacker, distance, 18);
+  const distance = Math.min(620, Math.max(260, Math.abs(centerX(target) - centerX(attacker)) + 70));
 
-  if (isFacingTarget(attacker, target) && distanceBetween(attacker, target) < 560) {
-    applyDamage(target, getScaledDamage(attacker, target, 26), attacker.facing * 16);
+  addDirectionalEffect("beam", attacker, distance, 24);
+  shakeArena();
+
+  if (isFacingTarget(attacker, target) && distanceBetween(attacker, target) < 640) {
+    applyDamage(target, getScaledDamage(attacker, target, 30), attacker.facing * 22);
     addEffect("impact", centerX(target) - 32, getEntityTop(target) + 50);
   }
 }
 
 function specialIceBreath(attacker, target) {
   flashArena("ice");
-  addDirectionalEffect("cone ice", attacker, 195, 80);
+  addDirectionalEffect("cone ice", attacker, 220, 96);
 
-  if (isFacingTarget(attacker, target) && distanceBetween(attacker, target) < 190) {
-    applyDamage(target, getScaledDamage(attacker, target, 12), attacker.facing * 9);
+  if (isFacingTarget(attacker, target) && distanceBetween(attacker, target) < 222) {
+    applyDamage(target, getScaledDamage(attacker, target, 13), attacker.facing * 8);
 
     const now = performance.now();
-    target.slowUntil = now + 3600;
-    target.trappedUntil = now + 950;
 
+    target.slowUntil = now + 4200;
+    target.trappedUntil = now + 1300;
+
+    showFloatingText(target, "FROZEN", "dodge");
     addEffect("impact", centerX(target) - 36, getEntityTop(target) + 55);
   }
 }
@@ -1099,8 +1103,14 @@ function specialTornado(attacker, target) {
 }
 
 function specialHealingAura(attacker) {
-  attacker.health = Math.min(attacker.maxHealth, attacker.health + 26);
+  const before = attacker.health;
+  attacker.health = Math.min(attacker.maxHealth, attacker.health + 30);
+
+  const healed = attacker.health - before;
+
   addEffect("aura", centerX(attacker) - 80, getEntityTop(attacker) - 2);
+  showFloatingText(attacker, `+${healed}`, "heal");
+  playSound("heal");
 }
 
 function specialShadowChain(attacker, target) {
@@ -1183,9 +1193,20 @@ function updateStatusEffects(entity, now) {
 
   if (entity.burnUntil > now && now >= entity.nextBurnAt) {
     entity.nextBurnAt = now + 700;
-    entity.health = Math.max(0, entity.health - 4);
+    entity.health = Math.max(0, entity.health - 5);
+
+    showFloatingText(entity, "-5", "damage");
     addEffect("impact", centerX(entity) - 26, getEntityTop(entity) + 46);
   }
+
+  if (entity.poisonUntil > now && now >= entity.nextPoisonAt) {
+    entity.nextPoisonAt = now + 760;
+    entity.health = Math.max(0, entity.health - 5);
+
+    showFloatingText(entity, "-5", "damage");
+    addEffect("poison", centerX(entity) - 45, getEntityTop(entity) + 50);
+  }
+}
 
   if (entity.poisonUntil > now && now >= entity.nextPoisonAt) {
     entity.nextPoisonAt = now + 760;
@@ -1207,6 +1228,8 @@ function endRound(winner, reason) {
 
   state.roundActive = false;
   stopLoop();
+
+   playSound(winner === "player" ? "round" : "hit");
 
   if (winner === "player") state.playerRoundWins += 1;
   else state.botRoundWins += 1;
@@ -1458,3 +1481,181 @@ window.addEventListener("resize", () => {
     state.bot.x = clamp(state.bot.x, 10, state.arenaWidth - state.bot.width - 10);
   }
 });
+
+/* ============================================================
+   VERSION 3 HELPERS
+============================================================ */
+
+function showFightIntro() {
+  if (!fightIntro) return;
+
+  fightIntroTitle.textContent = `Round ${state.currentRound}`;
+  fightIntroText.textContent = "FIGHT!";
+
+  fightIntro.classList.remove("hidden");
+
+  setTimeout(() => {
+    fightIntro.classList.add("hidden");
+  }, 1120);
+
+  playSound("round");
+}
+
+function togglePause() {
+  if (!state.roundActive) return;
+
+  if (state.paused) {
+    resumeGame();
+  } else {
+    pauseGame();
+  }
+}
+
+function pauseGame() {
+  if (!state.roundActive) return;
+
+  state.paused = true;
+  pauseOverlay.classList.remove("hidden");
+}
+
+function resumeGame() {
+  state.paused = false;
+  pauseOverlay.classList.add("hidden");
+  state.lastFrameTime = performance.now();
+}
+
+function showFloatingText(entity, text, type = "damage") {
+  if (!entity || !effectsLayer) return;
+
+  const bubble = document.createElement("div");
+  bubble.className = `damage-number ${type}`;
+
+  bubble.textContent = text;
+  bubble.style.left = `${centerX(entity) - 20}px`;
+  bubble.style.top = `${getEntityTop(entity) + 24}px`;
+
+  effectsLayer.appendChild(bubble);
+
+  setTimeout(() => {
+    bubble.remove();
+  }, 850);
+}
+
+function showSpecialCallout(attacker) {
+  if (!attacker || !effectsLayer) return;
+
+  const callout = document.createElement("div");
+  callout.className = `special-callout ${attacker.isBot ? "bot-side" : "player-side"}`;
+
+  callout.textContent = attacker.fighter.specialName;
+
+  effectsLayer.appendChild(callout);
+
+  setTimeout(() => {
+    callout.remove();
+  }, 950);
+}
+
+function updateStatusVisuals(entity, now) {
+  if (!entity) return;
+
+  if (entity.slowUntil <= now) {
+    entity.slowUntil = 0;
+  }
+
+  if (entity.burnUntil <= now) {
+    entity.burnUntil = 0;
+  }
+
+  if (entity.poisonUntil <= now) {
+    entity.poisonUntil = 0;
+  }
+
+  if (entity.trappedUntil <= now) {
+    entity.trappedUntil = 0;
+  }
+}
+
+/* 
+  Tiny built-in sound system.
+  No audio files needed.
+  Browser may only play sounds after user interaction.
+*/
+
+function getAudioContext() {
+  if (!state.soundEnabled) return null;
+
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+
+  if (!AudioContextClass) return null;
+
+  if (!state.audioCtx) {
+    state.audioCtx = new AudioContextClass();
+  }
+
+  return state.audioCtx;
+}
+
+function playTone(freq, duration = 0.08, type = "sine", volume = 0.035) {
+  const ctx = getAudioContext();
+
+  if (!ctx) return;
+
+  const oscillator = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  oscillator.type = type;
+  oscillator.frequency.value = freq;
+
+  gain.gain.setValueAtTime(volume, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+
+  oscillator.connect(gain);
+  gain.connect(ctx.destination);
+
+  oscillator.start();
+  oscillator.stop(ctx.currentTime + duration);
+}
+
+function playSound(name) {
+  try {
+    if (name === "round") {
+      playTone(420, 0.08, "triangle", 0.035);
+      setTimeout(() => playTone(680, 0.09, "triangle", 0.035), 90);
+      return;
+    }
+
+    if (name === "swing") {
+      playTone(220, 0.05, "sawtooth", 0.025);
+      return;
+    }
+
+    if (name === "hit") {
+      playTone(120, 0.07, "square", 0.04);
+      return;
+    }
+
+    if (name === "special") {
+      playTone(260, 0.08, "triangle", 0.035);
+      setTimeout(() => playTone(520, 0.12, "triangle", 0.035), 70);
+      return;
+    }
+
+    if (name === "heal") {
+      playTone(520, 0.08, "sine", 0.035);
+      setTimeout(() => playTone(760, 0.12, "sine", 0.028), 80);
+      return;
+    }
+
+    if (name === "jump") {
+      playTone(360, 0.06, "triangle", 0.02);
+      return;
+    }
+
+    if (name === "dash") {
+      playTone(740, 0.04, "square", 0.018);
+    }
+  } catch (error) {
+    // Sound failure should never break gameplay.
+  }
+      }
