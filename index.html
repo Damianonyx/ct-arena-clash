@@ -133,10 +133,11 @@
         </div>
 
         <div class="center-hud">
-          <span id="levelHud">Level 1</span>
-          <strong id="timerHud">60</strong>
-          <span id="roundHud">Round 1</span>
-          <small id="matchScoreHud">0 - 0</small>
+  <span id="levelHud">Level 1</span>
+  <strong id="timerHud">60</strong>
+  <span id="roundHud">Round 1</span>
+  <small id="matchScoreHud">0 - 0</small>
+  <button id="pauseBtn" class="pause-btn">Pause</button>
         </div>
 
         <div class="hud-card right">
@@ -155,7 +156,12 @@
         <div class="arena-bg-glow"></div>
         <div class="arena-title">CT ARENA CLASH</div>
 
-        <div id="effectsLayer" class="effects-layer"></div>
+<div id="fightIntro" class="fight-intro hidden">
+  <strong id="fightIntroTitle">Round 1</strong>
+  <span id="fightIntroText">FIGHT!</span>
+</div>
+
+<div id="effectsLayer" class="effects-layer"></div>
 
         <div id="playerSprite" class="fighter-sprite player-sprite"></div>
         <div id="botSprite" class="fighter-sprite bot-sprite"></div>
@@ -189,6 +195,18 @@
         <button data-action="kick">Kick</button>
         <button data-action="special">Special</button>
         <button data-action="dodge">Dodge</button>
+      </div>
+      <div id="pauseOverlay" class="pause-overlay hidden">
+  <div class="pause-card">
+    <p class="eyebrow">Paused</p>
+    <h2>Fight Paused</h2>
+    <p>Resume the match or return to the main menu.</p>
+
+    <div class="menu-actions">
+      <button id="resumeBtn" class="primary-btn">Resume Fight</button>
+      <button id="quitFromPauseBtn" class="ghost-btn">Main Menu</button>
+    </div>
+  </div>
       </div>
     </section>
 
