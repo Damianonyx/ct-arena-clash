@@ -1,3 +1,26 @@
+window.onerror = function(message, source, lineno, colno, error) {
+
+  const errorBox = document.createElement("div");
+
+  errorBox.style.position = "fixed";
+  errorBox.style.top = "10px";
+  errorBox.style.left = "10px";
+  errorBox.style.right = "10px";
+  errorBox.style.zIndex = "999999";
+  errorBox.style.padding = "14px";
+  errorBox.style.background = "red";
+  errorBox.style.color = "white";
+  errorBox.style.fontSize = "14px";
+  errorBox.style.fontWeight = "bold";
+  errorBox.style.borderRadius = "10px";
+
+  errorBox.innerText =
+    "ERROR:\\n\\n" +
+    message +
+    "\\n\\nLine: " + lineno;
+
+  document.body.appendChild(errorBox);
+};
 "use strict";
 
 /* ============================================================
