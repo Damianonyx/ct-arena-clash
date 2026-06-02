@@ -545,7 +545,7 @@ function createCombatant(fighter, side, isBot = false) {
     width: window.innerWidth < 560 ? 96 : 118,
     height: window.innerWidth < 560 ? 134 : 154,
 
-    x: side === "left" ? 90 : state.arenaWidth - 210,
+    x: side === "left" ? 130 : state.arenaWidth - 260,
     z: 0,
     vx: 0,
     vz: 0,
@@ -728,12 +728,64 @@ function bindKeyboard() {
     state.keys[event.key.toLowerCase()] = false;
   });
 }
+
+function bindMobileControls() {
+  document.querySelectorAll(".mobile-controls button").forEach(button => {
+    const hold = button.dataset.hold;
+    const action = button.dataset.action;
+
+    if (hold) {
+      button.addEventListener("pointerdown", event => {
+        event.preventDefault();
+
+        if (state.paused) return;
+
+        state.keys[hold === "left" ? "a" : "d"] = true;
+      });
+
+      button.addEventListener("pointerup", () => {
+        state.keys[hold === "left" ? "a" : "d"] = false;
+      });
+
+      button.addEventListener("pointerleave", () => {
+        state.keys[hold === "left" ? "a" : "d"] = false;
+      });
+
+      button.addEventListener("pointercancel", () => {
+        state.keys[hold === "left" ? "a" : "d"] = false;
+      });
+    }
+
+    if (action) {
+      button.addEventListener("pointerdown", event => {
+        event.preventDefault();
+
+        if (!state.roundActive || state.paused) return;
+
+        const now = performance.now();
+
+        if (now < state.inputLockedUntil) return;
+
+        if (action === "jump") jump(state.player);
+        if (action === "punch") punch(state.player, state.bot);
+        if (action === "kick") kick(state.player, state.bot);
+        if (action === "special") useSpecial(state.player, state.bot);
+        if (action === "dodge") dodge(state.player);
+      });
+    }
+  });
+}
       
 /* ---------------- PLAYER ---------------- */
 
 function updatePlayer(dt, now) {
   const player = state.player;
   if (!player) return;
+
+  if (now < state.inputLockedUntil) {
+    player.vx = 0;
+    return;
+  }
 
   if (now < player.stunnedUntil || now < player.trappedUntil) {
     player.vx = 0;
@@ -761,6 +813,10 @@ function updateBot(dt, now) {
   const bot = state.bot;
   const player = state.player;
   if (!bot || !player) return;
+   if (now < state.inputLockedUntil) {
+  bot.vx = 0;
+  return;
+   }
 
   if (now < bot.stunnedUntil || now < bot.trappedUntil) {
     bot.vx = 0;
@@ -835,6 +891,8 @@ function updatePhysics(entity, dt) {
 }
 
 function jump(entity) {
+   const now = performance.now();
+if (now < state.inputLockedUntil || state.paused) return;
   if (!entity || !entity.grounded || !state.roundActive) return;
   entity.vz = 650;
   entity.grounded = false;
@@ -842,13 +900,18 @@ function jump(entity) {
 
 function dodge(entity) {
   const now = performance.now();
+
+  if (now < state.inputLockedUntil || state.paused) return;
   if (!entity || now - entity.lastDodge < 1400) return;
+
+  playSound("dash");
 
   entity.lastDodge = now;
   entity.dodgeUntil = now + 360;
-  entity.x += entity.facing * 54;
+  entity.x += entity.facing * 64;
   entity.x = clamp(entity.x, 10, state.arenaWidth - entity.width - 10);
 
+  showFloatingText(entity, "DODGE", "dodge");
   addEffect("impact", centerX(entity) - 36, getEntityTop(entity) + 70);
 }
 
@@ -856,33 +919,39 @@ function dodge(entity) {
 
 function punch(attacker, target) {
   const now = performance.now();
+
+  if (now < state.inputLockedUntil || state.paused) return;
   if (!attacker || !target || now - attacker.lastPunch < 430) return;
 
   attacker.lastPunch = now;
   setAction(attacker, "punch", 150);
+  playSound("swing");
 
-  const hit = isFacingTarget(attacker, target) && distanceBetween(attacker, target) < 96;
+  const hit = isFacingTarget(attacker, target) && distanceBetween(attacker, target) < 100;
 
   addEffect("impact", centerX(attacker) + attacker.facing * 48 - 36, getEntityTop(attacker) + 58);
 
   if (hit) {
-    applyDamage(target, getScaledDamage(attacker, target, 13), attacker.facing * 12);
+    applyDamage(target, getScaledDamage(attacker, target, 13), attacker.facing * 16);
   }
 }
 
 function kick(attacker, target) {
   const now = performance.now();
+
+  if (now < state.inputLockedUntil || state.paused) return;
   if (!attacker || !target || now - attacker.lastKick < 720) return;
 
   attacker.lastKick = now;
   setAction(attacker, "kick", 190);
+  playSound("swing");
 
-  const hit = isFacingTarget(attacker, target) && distanceBetween(attacker, target) < 135;
+  const hit = isFacingTarget(attacker, target) && distanceBetween(attacker, target) < 142;
 
   addEffect("kickwave", centerX(attacker) + attacker.facing * 44 - 52, getEntityTop(attacker) + 74);
 
   if (hit) {
-    applyDamage(target, getScaledDamage(attacker, target, 17), attacker.facing * 28);
+    applyDamage(target, getScaledDamage(attacker, target, 17), attacker.facing * 38);
   }
 }
 
@@ -890,51 +959,67 @@ function kick(attacker, target) {
 
 function useSpecial(attacker, target) {
   const now = performance.now();
+
+  if (now < state.inputLockedUntil || state.paused) return;
   if (!attacker || !target) return;
 
   const cooldown = attacker.fighter.specialCooldown;
   if (now - attacker.lastSpecial < cooldown) return;
 
   attacker.lastSpecial = now;
-  setAction(attacker, "special", 240);
+  setAction(attacker, "special", 260);
+  showSpecialCallout(attacker);
+  playSound("special");
 
   switch (attacker.fighter.specialType) {
     case "powerPunch":
       specialPowerPunch(attacker, target);
       break;
+
     case "swiftFeet":
       specialSpeedBoost(attacker, "swift");
       break;
+
     case "fireBreath":
       specialFireBreath(attacker, target);
       break;
+
     case "eyeLasers":
       specialEyeLasers(attacker, target);
       break;
+
     case "iceBreath":
       specialIceBreath(attacker, target);
       break;
+
     case "powerKick":
       specialPowerKick(attacker, target);
       break;
+
     case "tornadoStrike":
       specialTornado(attacker, target);
       break;
+
     case "speedBurst":
       specialSpeedBoost(attacker, "burst");
       break;
+
     case "healingAura":
       specialHealingAura(attacker);
       break;
+
     case "shadowChain":
       specialShadowChain(attacker, target);
       break;
+
     case "groundSlam":
       specialGroundSlam(attacker, target);
       break;
+
     case "poisonTouch":
       specialPoisonTouch(attacker, target);
       break;
+
     default:
       punch(attacker, target);
   }
@@ -1067,18 +1152,27 @@ function applyDamage(target, amount, knockback = 0) {
 
   if (!target || target.health <= 0) return;
   if (now < target.hitInvulnerableUntil) return;
+
   if (now < target.dodgeUntil) {
+    showFloatingText(target, "DODGE", "dodge");
     addEffect("impact", centerX(target) - 36, getEntityTop(target) + 58);
+    playSound("dash");
     return;
   }
 
-  target.health = Math.max(0, target.health - amount);
-  target.x += knockback;
+  const finalDamage = Math.max(1, Math.round(amount));
+
+  target.health = Math.max(0, target.health - finalDamage);
+  target.x += knockback * 1.2;
   target.x = clamp(target.x, 10, state.arenaWidth - target.width - 10);
   target.hitInvulnerableUntil = now + 240;
 
   const sprite = target.isBot ? botSprite : playerSprite;
   sprite.classList.add("hit");
+
+  showFloatingText(target, `-${finalDamage}`, "damage");
+  playSound("hit");
+
   setTimeout(() => sprite.classList.remove("hit"), 130);
 
   updateHud();
