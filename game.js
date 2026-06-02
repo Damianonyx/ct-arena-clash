@@ -237,6 +237,14 @@ const matchVictoryText = document.getElementById("matchVictoryText");
 const gameOverText = document.getElementById("gameOverText");
 const championText = document.getElementById("championText");
 const defeatedList = document.getElementById("defeatedList");
+const fightIntro = document.getElementById("fightIntro");
+const fightIntroTitle = document.getElementById("fightIntroTitle");
+const fightIntroText = document.getElementById("fightIntroText");
+
+const pauseBtn = document.getElementById("pauseBtn");
+const pauseOverlay = document.getElementById("pauseOverlay");
+const resumeBtn = document.getElementById("resumeBtn");
+const quitFromPauseBtn = document.getElementById("quitFromPauseBtn");
 
 /* ---------------- STATE ---------------- */
 
@@ -256,6 +264,10 @@ const state = {
   bot: null,
 
   roundActive: false,
+   paused: false,
+inputLockedUntil: 0,
+soundEnabled: true,
+audioCtx: null,
   roundTimer: 60,
   lastFrameTime: 0,
   animationId: null,
@@ -581,14 +593,24 @@ function beginRound() {
 
   state.roundTimer = 60;
   state.roundActive = true;
+  state.paused = false;
   state.afterRoundTarget = "nextRound";
+  state.inputLockedUntil = performance.now() + 1150;
 
+  pauseOverlay.classList.add("hidden");
   effectsLayer.innerHTML = "";
+
   buildSprite(playerSprite, state.selectedFighter);
   buildSprite(botSprite, state.currentOpponent);
 
   updateHud();
   showScreen("fight");
+  showFightIntro();
+
+  stopLoop();
+  state.lastFrameTime = performance.now();
+  state.animationId = requestAnimationFrame(gameLoop);
+}
 
   stopLoop();
   state.lastFrameTime = performance.now();
@@ -634,6 +656,12 @@ function stopLoop() {
 function gameLoop(now) {
   if (!state.roundActive) return;
 
+  if (state.paused) {
+    state.lastFrameTime = now;
+    state.animationId = requestAnimationFrame(gameLoop);
+    return;
+  }
+
   const dt = Math.min(0.033, (now - state.lastFrameTime) / 1000);
   state.lastFrameTime = now;
 
@@ -644,7 +672,8 @@ function gameLoop(now) {
   updatePhysics(state.player, dt);
   updatePhysics(state.bot, dt);
   updateStatusEffects(state.player, now);
-  updateStatusEffects(state.bot, now);
+  updateStatusVisuals(state.player, now);
+  updateStatusVisuals(state.bot, now);
   faceEachOther();
 
   renderCombatants(now);
@@ -673,12 +702,20 @@ function gameLoop(now) {
 
 function bindKeyboard() {
   window.addEventListener("keydown", event => {
-    state.keys[event.key.toLowerCase()] = true;
+    const key = event.key.toLowerCase();
 
-    if (!state.roundActive) return;
+    if (key === "escape" && screens.fight.classList.contains("active")) {
+      togglePause();
+      return;
+    }
+
+    state.keys[key] = true;
+
+    if (!state.roundActive || state.paused) return;
     if (event.repeat) return;
 
-    const key = event.key.toLowerCase();
+    const now = performance.now();
+    if (now < state.inputLockedUntil) return;
 
     if (key === "w" || event.key === "ArrowUp") jump(state.player);
     if (key === "j") punch(state.player, state.bot);
@@ -691,42 +728,7 @@ function bindKeyboard() {
     state.keys[event.key.toLowerCase()] = false;
   });
 }
-
-function bindMobileControls() {
-  document.querySelectorAll(".mobile-controls button").forEach(button => {
-    const hold = button.dataset.hold;
-    const action = button.dataset.action;
-
-    if (hold) {
-      button.addEventListener("pointerdown", event => {
-        event.preventDefault();
-        state.keys[hold === "left" ? "a" : "d"] = true;
-      });
-
-      button.addEventListener("pointerup", () => {
-        state.keys[hold === "left" ? "a" : "d"] = false;
-      });
-
-      button.addEventListener("pointerleave", () => {
-        state.keys[hold === "left" ? "a" : "d"] = false;
-      });
-    }
-
-    if (action) {
-      button.addEventListener("pointerdown", event => {
-        event.preventDefault();
-        if (!state.roundActive) return;
-
-        if (action === "jump") jump(state.player);
-        if (action === "punch") punch(state.player, state.bot);
-        if (action === "kick") kick(state.player, state.bot);
-        if (action === "special") useSpecial(state.player, state.bot);
-        if (action === "dodge") dodge(state.player);
-      });
-    }
-  });
-}
-
+      
 /* ---------------- PLAYER ---------------- */
 
 function updatePlayer(dt, now) {
