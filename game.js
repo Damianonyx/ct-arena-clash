@@ -1401,3 +1401,181 @@ window.addEventListener("resize", () => {
     state.bot.x = clamp(state.bot.x, 10, state.arenaWidth - state.bot.width - 10);
   }
 });
+
+/* ============================================================
+   VERSION 3 HELPERS
+============================================================ */
+
+function showFightIntro() {
+  if (!fightIntro) return;
+
+  fightIntroTitle.textContent = `Round ${state.currentRound}`;
+  fightIntroText.textContent = "FIGHT!";
+
+  fightIntro.classList.remove("hidden");
+
+  setTimeout(() => {
+    fightIntro.classList.add("hidden");
+  }, 1120);
+
+  playSound("round");
+}
+
+function togglePause() {
+  if (!state.roundActive) return;
+
+  if (state.paused) {
+    resumeGame();
+  } else {
+    pauseGame();
+  }
+}
+
+function pauseGame() {
+  if (!state.roundActive) return;
+
+  state.paused = true;
+  pauseOverlay.classList.remove("hidden");
+}
+
+function resumeGame() {
+  state.paused = false;
+  pauseOverlay.classList.add("hidden");
+  state.lastFrameTime = performance.now();
+}
+
+function showFloatingText(entity, text, type = "damage") {
+  if (!entity || !effectsLayer) return;
+
+  const bubble = document.createElement("div");
+  bubble.className = `damage-number ${type}`;
+
+  bubble.textContent = text;
+  bubble.style.left = `${centerX(entity) - 20}px`;
+  bubble.style.top = `${getEntityTop(entity) + 24}px`;
+
+  effectsLayer.appendChild(bubble);
+
+  setTimeout(() => {
+    bubble.remove();
+  }, 850);
+}
+
+function showSpecialCallout(attacker) {
+  if (!attacker || !effectsLayer) return;
+
+  const callout = document.createElement("div");
+  callout.className = `special-callout ${attacker.isBot ? "bot-side" : "player-side"}`;
+
+  callout.textContent = attacker.fighter.specialName;
+
+  effectsLayer.appendChild(callout);
+
+  setTimeout(() => {
+    callout.remove();
+  }, 950);
+}
+
+function updateStatusVisuals(entity, now) {
+  if (!entity) return;
+
+  if (entity.slowUntil <= now) {
+    entity.slowUntil = 0;
+  }
+
+  if (entity.burnUntil <= now) {
+    entity.burnUntil = 0;
+  }
+
+  if (entity.poisonUntil <= now) {
+    entity.poisonUntil = 0;
+  }
+
+  if (entity.trappedUntil <= now) {
+    entity.trappedUntil = 0;
+  }
+}
+
+/* 
+  Tiny built-in sound system.
+  No audio files needed.
+  Browser may only play sounds after user interaction.
+*/
+
+function getAudioContext() {
+  if (!state.soundEnabled) return null;
+
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+
+  if (!AudioContextClass) return null;
+
+  if (!state.audioCtx) {
+    state.audioCtx = new AudioContextClass();
+  }
+
+  return state.audioCtx;
+}
+
+function playTone(freq, duration = 0.08, type = "sine", volume = 0.035) {
+  const ctx = getAudioContext();
+
+  if (!ctx) return;
+
+  const oscillator = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  oscillator.type = type;
+  oscillator.frequency.value = freq;
+
+  gain.gain.setValueAtTime(volume, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+
+  oscillator.connect(gain);
+  gain.connect(ctx.destination);
+
+  oscillator.start();
+  oscillator.stop(ctx.currentTime + duration);
+}
+
+function playSound(name) {
+  try {
+    if (name === "round") {
+      playTone(420, 0.08, "triangle", 0.035);
+      setTimeout(() => playTone(680, 0.09, "triangle", 0.035), 90);
+      return;
+    }
+
+    if (name === "swing") {
+      playTone(220, 0.05, "sawtooth", 0.025);
+      return;
+    }
+
+    if (name === "hit") {
+      playTone(120, 0.07, "square", 0.04);
+      return;
+    }
+
+    if (name === "special") {
+      playTone(260, 0.08, "triangle", 0.035);
+      setTimeout(() => playTone(520, 0.12, "triangle", 0.035), 70);
+      return;
+    }
+
+    if (name === "heal") {
+      playTone(520, 0.08, "sine", 0.035);
+      setTimeout(() => playTone(760, 0.12, "sine", 0.028), 80);
+      return;
+    }
+
+    if (name === "jump") {
+      playTone(360, 0.06, "triangle", 0.02);
+      return;
+    }
+
+    if (name === "dash") {
+      playTone(740, 0.04, "square", 0.018);
+    }
+  } catch (error) {
+    // Sound failure should never break gameplay.
+  }
+}
