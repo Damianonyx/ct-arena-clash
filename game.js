@@ -917,13 +917,16 @@ function kick(attacker, target) {
 function useSpecial(attacker, target) {
   const now = performance.now();
 
+  if (now < state.inputLockedUntil || state.paused) return;
   if (!attacker || !target) return;
 
   const cooldown = attacker.fighter.specialCooldown;
-
   if (now - attacker.lastSpecial < cooldown) return;
 
   attacker.lastSpecial = now;
+  setAction(attacker, "special", 260);
+  showSpecialCallout(attacker);
+  playSound("special");
 
   switch (attacker.fighter.specialType) {
     case "powerPunch":
@@ -998,34 +1001,46 @@ function specialSpeedBoost(attacker, type) {
 }
 
 function specialFireBreath(attacker, target) {
-  addDirectionalEffect("cone fire", attacker, 172, 62);
+  flashArena("fire");
+  addDirectionalEffect("cone fire", attacker, 230, 96);
 
-  if (isFacingTarget(attacker, target) && distanceBetween(attacker, target) < 205) {
-    applyDamage(target, getScaledDamage(attacker, target, 13), attacker.facing * 8);
+  if (isFacingTarget(attacker, target) && distanceBetween(attacker, target) < 238) {
+    applyDamage(target, getScaledDamage(attacker, target, 15), attacker.facing * 14);
 
     const now = performance.now();
-    target.burnUntil = now + 3600;
-    target.nextBurnAt = now + 650;
+    target.burnUntil = now + 4800;
+    target.nextBurnAt = now + 450;
+
+    addEffect("impact", centerX(target) - 36, getEntityTop(target) + 55);
   }
 }
 
 function specialEyeLasers(attacker, target) {
-  const beamWidth = Math.min(480, Math.max(160, Math.abs(centerX(target) - centerX(attacker)) + 30));
-  addDirectionalEffect("beam", attacker, beamWidth, 8);
+  const distance = Math.min(620, Math.max(260, Math.abs(centerX(target) - centerX(attacker)) + 70));
 
-  if (isFacingTarget(attacker, target) && distanceBetween(attacker, target) < 520) {
-    applyDamage(target, getScaledDamage(attacker, target, 25), attacker.facing * 14);
+  addDirectionalEffect("beam", attacker, distance, 24);
+  shakeArena();
+
+  if (isFacingTarget(attacker, target) && distanceBetween(attacker, target) < 640) {
+    applyDamage(target, getScaledDamage(attacker, target, 30), attacker.facing * 22);
+    addEffect("impact", centerX(target) - 32, getEntityTop(target) + 50);
   }
 }
 
 function specialIceBreath(attacker, target) {
-  addDirectionalEffect("cone ice", attacker, 170, 62);
+  flashArena("ice");
+  addDirectionalEffect("cone ice", attacker, 220, 96);
 
-  if (isFacingTarget(attacker, target) && distanceBetween(attacker, target) < 185) {
-    applyDamage(target, getScaledDamage(attacker, target, 11), attacker.facing * 9);
+  if (isFacingTarget(attacker, target) && distanceBetween(attacker, target) < 222) {
+    applyDamage(target, getScaledDamage(attacker, target, 13), attacker.facing * 8);
 
     const now = performance.now();
-    target.slowUntil = now + 3200;
+
+    target.slowUntil = now + 4200;
+    target.trappedUntil = now + 1300;
+
+    showFloatingText(target, "FROZEN", "dodge");
+    addEffect("impact", centerX(target) - 36, getEntityTop(target) + 55);
   }
 }
 
@@ -1046,8 +1061,14 @@ function specialTornado(attacker, target) {
 }
 
 function specialHealingAura(attacker) {
-  attacker.health = Math.min(attacker.maxHealth, attacker.health + 26);
+  const before = attacker.health;
+  attacker.health = Math.min(attacker.maxHealth, attacker.health + 30);
+
+  const healed = attacker.health - before;
+
   addEffect("aura", centerX(attacker) - 80, getEntityTop(attacker) - 2);
+  showFloatingText(attacker, `+${healed}`, "heal");
+  playSound("heal");
 }
 
 function specialShadowChain(attacker, target) {
@@ -1101,18 +1122,26 @@ function applyDamage(target, amount, knockback = 0) {
 
   if (!target || target.health <= 0) return;
   if (now < target.hitInvulnerableUntil) return;
+
   if (now < target.dodgeUntil) {
+    showFloatingText(target, "DODGE", "dodge");
     addEffect("impact", centerX(target) - 36, getEntityTop(target) + 58);
+    playSound("dash");
     return;
   }
 
-  target.health = Math.max(0, target.health - amount);
-  target.x += knockback;
+  const finalDamage = Math.max(1, Math.round(amount));
+
+  target.health = Math.max(0, target.health - finalDamage);
+  target.x += knockback * 1.2;
   target.x = clamp(target.x, 10, state.arenaWidth - target.width - 10);
   target.hitInvulnerableUntil = now + 240;
 
   const sprite = target.isBot ? botSprite : playerSprite;
   sprite.classList.add("hit");
+
+  showFloatingText(target, `-${finalDamage}`, "damage");
+  playSound("hit");
 
   setTimeout(() => sprite.classList.remove("hit"), 130);
 
@@ -1150,6 +1179,8 @@ function endRound(winner, reason) {
 
   state.roundActive = false;
   stopLoop();
+
+   playSound(winner === "player" ? "round" : "hit");
 
   if (winner === "player") {
     state.playerRoundWins += 1;
@@ -1274,6 +1305,12 @@ function renderEntity(sprite, entity, now) {
   sprite.classList.toggle("boosted", now < entity.boostUntil);
   sprite.classList.toggle("frozen", now < entity.slowUntil);
   sprite.classList.toggle("poisoned", now < entity.poisonUntil);
+  sprite.classList.toggle("burning", now < entity.burnUntil);
+  sprite.classList.toggle("trapped", now < entity.trappedUntil);
+
+  sprite.classList.toggle("attacking-punch", entity.action === "punch" && now < entity.actionUntil);
+  sprite.classList.toggle("attacking-kick", entity.action === "kick" && now < entity.actionUntil);
+  sprite.classList.toggle("casting-special", entity.action === "special" && now < entity.actionUntil);
 }
 
 function updateHud() {
